@@ -1,0 +1,113 @@
+import type { Profile } from './api';
+
+export type Locale = Profile['locale'];
+
+export const selfServeCopy = {
+  en: {
+    register: {
+      title: 'Create an account',
+      displayName: 'Display name',
+      email: 'Email',
+      password: 'Password',
+      passwordHint: 'Use 15 to 128 characters.',
+      submit: 'Register',
+      pending: 'Submitting…',
+      signIn: 'Back to sign in',
+      accepted: 'Registration request received. Sign in with your email and password.',
+      invalidName: 'Enter a display name of 1 to 80 characters.',
+      invalidEmail: 'Enter a valid email address.',
+      invalidPassword: 'Enter a password of 15 to 128 characters.',
+    },
+    workspace: {
+      create: 'Create workspace',
+      name: 'Workspace name',
+      identifier: 'Slug',
+      identifierHint: 'Use up to 64 lowercase letters or digits, with hyphens between parts.',
+      invalidIdentifier: 'Enter a slug using lowercase letters or digits separated by hyphens, up to 64 characters.',
+      duplicate: 'This slug is already taken.',
+    },
+    project: {
+      create: 'Create project',
+      name: 'Project name',
+      identifier: 'Project key',
+      identifierHint: 'Use 2 to 10 uppercase letters or digits.',
+      invalidIdentifier: 'Enter a project key of 2 to 10 uppercase letters or digits.',
+      duplicate: 'This project key is already taken in this workspace.',
+    },
+    invalidResourceName: 'Enter a name of 1 to 100 characters.',
+    cancel: 'Cancel',
+    creating: 'Creating…',
+    retry: 'Try again',
+    outcomeUnknown: 'We could not confirm whether it was created. Try again to resend the same request.',
+    errors: {
+      REGISTRATION_DISABLED: 'Registration is currently disabled.',
+      RATE_LIMITED: 'Too many requests. Wait a moment and try again.',
+      VALIDATION_FAILED: 'Check the information you entered and try again.',
+      FORBIDDEN: 'You do not have permission to make this change.',
+      NOT_FOUND: 'This item does not exist or you no longer have access.',
+      CSRF_INVALID: 'The request could not be verified. Reload the page and try again.',
+      IDEMPOTENCY_KEY_REUSED: 'This action could not be repeated. Reload and try again.',
+      NETWORK_ERROR: 'The server could not be reached. Check your connection.',
+      REDIS_UNAVAILABLE: 'The service is temporarily unavailable.',
+      WORKSPACE_SUSPENDED: 'This workspace is suspended.',
+      USER_SUSPENDED: 'This account has been suspended.',
+      INTERNAL_ERROR: 'The server could not complete the request.',
+    },
+  },
+  vi: {
+    register: {
+      title: 'Tạo tài khoản',
+      displayName: 'Tên hiển thị',
+      email: 'Email',
+      password: 'Mật khẩu',
+      passwordHint: 'Dùng từ 15 đến 128 ký tự.',
+      submit: 'Đăng ký',
+      pending: 'Đang gửi…',
+      signIn: 'Quay lại đăng nhập',
+      accepted: 'Đã tiếp nhận yêu cầu đăng ký. Hãy đăng nhập bằng email và mật khẩu của bạn.',
+      invalidName: 'Nhập tên hiển thị dài từ 1 đến 80 ký tự.',
+      invalidEmail: 'Nhập địa chỉ email hợp lệ.',
+      invalidPassword: 'Nhập mật khẩu dài từ 15 đến 128 ký tự.',
+    },
+    workspace: {
+      create: 'Tạo workspace',
+      name: 'Tên workspace',
+      identifier: 'Slug',
+      identifierHint: 'Dùng tối đa 64 chữ thường hoặc chữ số, phân cách các phần bằng dấu gạch nối.',
+      invalidIdentifier: 'Nhập slug tối đa 64 ký tự gồm chữ thường hoặc chữ số, phân cách các phần bằng dấu gạch nối.',
+      duplicate: 'Slug này đã được sử dụng.',
+    },
+    project: {
+      create: 'Tạo project',
+      name: 'Tên project',
+      identifier: 'Mã project',
+      identifierHint: 'Dùng từ 2 đến 10 chữ in hoa hoặc chữ số.',
+      invalidIdentifier: 'Nhập mã project dài từ 2 đến 10 ký tự gồm chữ in hoa hoặc chữ số.',
+      duplicate: 'Mã project này đã được sử dụng trong workspace.',
+    },
+    invalidResourceName: 'Nhập tên dài từ 1 đến 100 ký tự.',
+    cancel: 'Hủy',
+    creating: 'Đang tạo…',
+    retry: 'Thử lại',
+    outcomeUnknown: 'Chưa xác nhận được kết quả tạo. Hãy thử lại để gửi lại cùng yêu cầu.',
+    errors: {
+      REGISTRATION_DISABLED: 'Tính năng đăng ký hiện đang tắt.',
+      RATE_LIMITED: 'Có quá nhiều yêu cầu. Hãy chờ một lát rồi thử lại.',
+      VALIDATION_FAILED: 'Kiểm tra thông tin đã nhập rồi thử lại.',
+      FORBIDDEN: 'Bạn không có quyền thực hiện thay đổi này.',
+      NOT_FOUND: 'Mục này không tồn tại hoặc bạn không còn quyền truy cập.',
+      CSRF_INVALID: 'Không xác minh được yêu cầu. Hãy tải lại trang rồi thử lại.',
+      IDEMPOTENCY_KEY_REUSED: 'Không thể lặp lại thao tác này. Hãy tải lại trang rồi thử lại.',
+      NETWORK_ERROR: 'Không thể kết nối máy chủ. Hãy kiểm tra kết nối của bạn.',
+      REDIS_UNAVAILABLE: 'Dịch vụ tạm thời không khả dụng.',
+      WORKSPACE_SUSPENDED: 'Workspace này đã bị tạm ngưng.',
+      USER_SUSPENDED: 'Tài khoản này đã bị tạm ngưng.',
+      INTERNAL_ERROR: 'Máy chủ không thể hoàn tất yêu cầu.',
+    },
+  },
+};
+
+export function selfServeError(locale: Locale, code: string) {
+  const errors: Readonly<Record<string, string>> = selfServeCopy[locale].errors;
+  return Object.hasOwn(errors, code) ? errors[code] : errors.INTERNAL_ERROR;
+}
