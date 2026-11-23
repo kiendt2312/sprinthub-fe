@@ -3,16 +3,17 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
-import type { DragEvent } from "react";
+import type { DragEvent, FormEvent } from "react";
 import { useProjectContext } from "@/components/project-shell";
-import { api, ApiError, errorMessage, newMutation } from "@/lib/api";
+import { api, ApiError, errorMessage, isCreateOutcomeUnknown, newMutation } from "@/lib/api";
 import type { Board, BoardCard, Profile, Status, TaskMove } from "@/lib/api";
 import { canDrop, columns, statusOptions } from "@/lib/task-status";
+import { createTaskCopy, createTaskError } from "./create-task-copy";
 import { planPlacement, samePlacement } from "./placement";
 import type { TaskDrag } from "./placement";
 import styles from "./board.module.css";
 
-type Phase = "loading" | "ready" | "saving" | "reconciling" | "blocked" | "unavailable" | "expired";
+type Phase = "loading" | "ready" | "saving" | "creating" | "reconciling" | "blocked" | "unavailable" | "expired";
 
 interface DropTarget {
   status: Status;
@@ -24,8 +25,23 @@ interface PreviousMove {
   mutation: ReturnType<typeof newMutation>;
 }
 
+interface CreateAttempt {
+  payload: Parameters<typeof api.createTask>[1];
+  mutation: ReturnType<typeof newMutation>;
+}
+
+interface CreateForm {
+  title: string;
+  error: string;
+  retry?: CreateAttempt;
+}
+
 const dateFormat = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
 const unknownMoveMessage = "The move may have been saved. We’re checking the board.";
+
+function boardAccessDenied(error: unknown) {
+  return error instanceof ApiError && [403, 404, 423].includes(error.status);
+}
 
 function Icon({ name, size = 16 }: { name: "project" | "board" | "calendar" | "priority"; size?: number }) {
   const paths = {
@@ -59,6 +75,7 @@ export default function BoardPage() {
 
 function ProjectBoard() {
   const { project, profile } = useProjectContext();
+  const copy = createTaskCopy[profile.locale];
   const router = useRouter();
   const [board, setBoard] = useState<Board | null>(null);
   const [phase, setPhase] = useState<Phase>("loading");
@@ -67,8 +84,12 @@ function ProjectBoard() {
   const [archived, setArchived] = useState(Boolean(project.archivedAt));
   const [dragging, setDragging] = useState<TaskDrag | null>(null);
   const [dropTarget, setDropTarget] = useState<DropTarget | null>(null);
+  const [createForm, setCreateForm] = useState<CreateForm | null>(null);
+  const [taskToFocus, setTaskToFocus] = useState<string | null>(null);
+  const titleInput = useRef<HTMLInputElement>(null);
+  const createdCard = useRef<HTMLAnchorElement>(null);
   const drag = useRef<TaskDrag | null>(null);
-  const writeLocked = useRef(false);
+  const boardLocked = useRef(false);
   const request = useRef(0);
   const previousMoves = useRef(new Map<string, PreviousMove>());
 
@@ -81,10 +102,14 @@ function ProjectBoard() {
   }, [router]);
 
   const loadBoard = useCallback(async (reconciling: boolean) => {
+    boardLocked.current = true;
     const current = ++request.current;
     try {
       const snapshot = await api.board(project.id);
       if (request.current !== current) return;
+      if (!columns.every(({ status }) => Array.isArray(snapshot?.columns?.[status]))) {
+        throw new Error("Missing board columns");
+      }
       setBoard(snapshot);
       setReadError("");
       if (reconciling) {
@@ -92,7 +117,7 @@ function ProjectBoard() {
           ? "Board refreshed. The current order is shown below."
           : message);
       }
-      writeLocked.current = false;
+      boardLocked.current = false;
       setPhase("ready");
     } catch (error) {
       if (request.current !== current) return;
@@ -100,10 +125,9 @@ function ProjectBoard() {
         expireSession();
         return;
       }
-      if (error instanceof ApiError && [403, 404, 423].includes(error.status)) {
-        setBoard(null);
-      }
+      if (boardAccessDenied(error)) setBoard(null);
       setReadError(errorMessage(error));
+      boardLocked.current = false;
       setPhase(reconciling ? "blocked" : "unavailable");
     }
   }, [expireSession, project.id]);
@@ -113,7 +137,92 @@ function ProjectBoard() {
     return () => { request.current += 1; };
   }, [loadBoard]);
 
-  const canMove = phase === "ready" && !archived;
+  const formOpen = createForm !== null;
+  useEffect(() => {
+    if (formOpen) titleInput.current?.focus();
+  }, [formOpen]);
+
+  useEffect(() => {
+    if (phase !== "ready" || !taskToFocus) return;
+    createdCard.current?.focus();
+    setTaskToFocus(null);
+  }, [phase, taskToFocus]);
+
+  const canCreate = phase === "ready" && !archived;
+  const canSubmitCreate = phase === "ready" && (!archived || Boolean(createForm?.retry));
+  const canMove = canCreate && !createForm?.retry;
+
+  function retryBoard() {
+    if (boardLocked.current) return;
+    const reconciling = phase === "blocked";
+    setReadError("");
+    setPhase(reconciling ? "reconciling" : "loading");
+    void loadBoard(reconciling);
+  }
+
+  function cancelCreate() {
+    if (!createForm || phase === "creating") return;
+    setCreateForm(null);
+    if (createForm.retry && phase === "ready" && !boardLocked.current) {
+      setPhase("reconciling");
+      void loadBoard(true);
+    }
+  }
+
+  async function createTask(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!createForm || !canSubmitCreate || boardLocked.current) return;
+
+    const title = createForm.title.trim();
+    if (!createForm.retry && (!title || Array.from(title).length > 200)) {
+      setCreateForm({ ...createForm, error: copy.invalidTitle });
+      titleInput.current?.focus();
+      return;
+    }
+
+    const attempt = createForm.retry ?? { payload: { title }, mutation: newMutation() };
+    boardLocked.current = true;
+    const current = request.current;
+    endDrag();
+    setCreateForm({ ...createForm, error: "" });
+    setNotice("");
+    setPhase("creating");
+
+    let taskId: string;
+    try {
+      const { data } = await api.createTask(project.id, attempt.payload, attempt.mutation);
+      taskId = data.id;
+    } catch (error) {
+      if (request.current !== current) return;
+      if (error instanceof ApiError && error.code === "SESSION_INVALID") {
+        expireSession();
+        return;
+      }
+      const uncertain = isCreateOutcomeUnknown(error);
+      // A rejected retry can fail before the server checks the original write.
+      setCreateForm({
+        ...createForm,
+        error: uncertain ? "" : createTaskError(error, profile.locale),
+        retry: uncertain ? attempt : createForm.retry,
+      });
+      if (error instanceof ApiError && error.code === "PROJECT_ARCHIVED") setArchived(true);
+      if (boardAccessDenied(error)) {
+        setBoard(null);
+        setPhase("reconciling");
+        await loadBoard(true);
+      } else {
+        boardLocked.current = false;
+        setPhase("ready");
+      }
+      return;
+    }
+
+    if (request.current !== current) return;
+    setCreateForm(null);
+    setTaskToFocus(taskId);
+    setPhase("reconciling");
+    await loadBoard(true);
+  }
 
   function endDrag() {
     drag.current = null;
@@ -122,7 +231,7 @@ function ProjectBoard() {
   }
 
   function beginDrag(event: DragEvent, taskId: string, from: Status) {
-    if (!canMove || writeLocked.current) {
+    if (!canMove || boardLocked.current) {
       event.preventDefault();
       return;
     }
@@ -134,7 +243,7 @@ function ProjectBoard() {
   }
 
   function showDrop(event: DragEvent, status: Status, index: number) {
-    if (!drag.current || !canMove) return;
+    if (!drag.current || !canMove || boardLocked.current) return;
     if (!canDrop(drag.current.from, status)) {
       setDropTarget(null);
       return;
@@ -147,14 +256,14 @@ function ProjectBoard() {
   }
 
   async function move(activeDrag: TaskDrag, to: Status, index: number) {
-    if (!board || !canMove || writeLocked.current) return;
+    if (!board || !canMove || boardLocked.current) return;
     const plan = planPlacement(board, activeDrag, to, index);
     if (!plan) return;
     const { payload, optimistic } = plan;
     const { taskId } = activeDrag;
 
     // Slots can refer to other cards, so keep one optimistic ordering change in flight.
-    writeLocked.current = true;
+    boardLocked.current = true;
     const current = request.current;
     const previous = previousMoves.current.get(taskId);
     const replay = previous && samePlacement(previous.payload, payload);
@@ -184,7 +293,7 @@ function ProjectBoard() {
         version: data.version,
       } : card);
       setBoard({ ...optimistic, columns: { ...optimistic.columns, [to]: cards } });
-      writeLocked.current = false;
+      boardLocked.current = false;
       setPhase("ready");
     } catch (error) {
       if (request.current !== current) return;
@@ -221,6 +330,7 @@ function ProjectBoard() {
     const dueLabel = dueDate && Number.isFinite(dueDate.getTime()) ? dateFormat.format(dueDate) : "No due date";
     return (
       <Link
+        ref={taskToFocus === card.id ? createdCard : undefined}
         href={`/projects/${project.id}/tasks/${card.id}`}
         className={styles.card}
         prefetch={false}
@@ -263,7 +373,7 @@ function ProjectBoard() {
 
   if (phase === "expired") return null;
 
-  const busy = phase === "loading" || phase === "saving" || phase === "reconciling";
+  const busy = phase === "loading" || phase === "saving" || phase === "creating" || phase === "reconciling";
   const destinations = dragging && statusOptions(dragging.from)
     .map(({ label }) => label)
     .join(" or ");
@@ -278,24 +388,57 @@ function ProjectBoard() {
       </header>
       <div className={styles.viewStrip}>
         <span><Icon name="board" />Kanban</span>
+        {!archived && !formOpen && (
+          <button type="button" className="sh-button" disabled={!canCreate} onClick={() => {
+            if (!boardLocked.current) setCreateForm({ title: "", error: "" });
+          }}>{copy.add}</button>
+        )}
       </div>
       <div role="status" className={styles.status}>
         {phase === "loading" && "Loading board…"}
         {phase === "saving" && "Saving move…"}
-        {phase === "reconciling" && "Refreshing board… "}
+        {phase === "creating" && copy.creating}
+        {phase === "reconciling" && (taskToFocus ? copy.refreshing : "Refreshing board… ")}
         {destinations
           ? `Move to ${destinations}, or reorder in the current column.`
-          : notice || (archived && "This project is archived.")}
+          : notice || (archived && !createForm?.error && copy.archived)}
       </div>
       {readError && (
         <div className={styles.readError} role="alert">
-          <span>{readError}</span>
-          <button type="button" disabled={busy} onClick={() => {
-            setReadError("");
-            setPhase(phase === "blocked" ? "reconciling" : "loading");
-            void loadBoard(phase === "blocked");
-          }}>Retry loading board</button>
+          <span>{taskToFocus ? copy.readFailed : readError}</span>
+          <button type="button" disabled={busy} onClick={retryBoard}>{copy.retryBoard}</button>
         </div>
+      )}
+      {createForm && (
+        <form className={styles.createForm} aria-label={copy.create} noValidate onSubmit={createTask}>
+          <label className={styles.titleField}>
+            {copy.title}
+            <input
+              ref={titleInput}
+              type="text"
+              name="title"
+              required
+              value={createForm.title}
+              readOnly={phase === "creating" || Boolean(createForm.retry)}
+              aria-invalid={createForm.error === copy.invalidTitle || undefined}
+              aria-describedby={createForm.error || createForm.retry ? "board-create-error" : undefined}
+              onChange={(event) => setCreateForm({ title: event.currentTarget.value, error: "" })}
+            />
+          </label>
+          <div className={styles.createActions}>
+            <button type="submit" className="sh-button" disabled={!canSubmitCreate}>
+              {createForm.retry ? copy.retryCreate : copy.create}
+            </button>
+            <button type="button" className="sh-button sh-button-secondary" disabled={phase === "creating"}
+              onClick={cancelCreate}>{copy.cancel}</button>
+          </div>
+          {(createForm.error || createForm.retry) && (
+            <p id="board-create-error" className={styles.createError} role="alert">
+              {createForm.error}{createForm.error && createForm.retry && " "}
+              {createForm.retry && copy.unknownOutcome}
+            </p>
+          )}
+        </form>
       )}
       {board && (
         <div className={styles.lanes} onDragLeave={(event) => {

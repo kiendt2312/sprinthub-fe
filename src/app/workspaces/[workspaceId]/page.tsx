@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { use, useCallback } from 'react';
+import { DirectoryCreate } from '@/components/directory-create';
 import { AppShell, ResourceError, ResourcePending, ShellIcon } from '@/components/shell';
 import { useSessionResource } from '@/components/use-session-resource';
 import { api } from '@/lib/api';
@@ -18,14 +19,18 @@ export default function WorkspaceProjectsPage({ params }: { params: Promise<{ wo
   const { state, retry } = useSessionResource(load);
   if (state.kind === 'pending') return <ResourcePending label="Loading projects…" />;
   if (state.kind === 'error') return <ResourceError message={state.message} retry={retry} />;
+  const { profile, workspace, projects } = state.data;
+  const canCreateProject = workspace.role === 'OWNER' || workspace.role === 'ADMIN';
 
   return (
-    <AppShell profile={state.data.profile} workspace={state.data.workspace}>
+    <AppShell profile={profile} workspace={workspace}>
       <section className="sh-directory">
-        <h1>Projects</h1>
-        {state.data.projects.length ? (
+        {canCreateProject
+          ? <DirectoryCreate title="Projects" locale={profile.locale} target={{ kind: 'project', workspaceId }} />
+          : <h1>Projects</h1>}
+        {projects.length ? (
           <ul className="sh-directory-list">
-            {state.data.projects.map(project => (
+            {projects.map(project => (
               <li key={project.id}>
                 <Link href={`/projects/${project.id}/board`} aria-label={project.name}>
                   <span className="sh-directory-icon"><ShellIcon name="folder" size={20} /></span>

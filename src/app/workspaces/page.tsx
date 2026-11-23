@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { DirectoryCreate } from '@/components/directory-create';
 import { AppShell, ResourceError, ResourcePending, ShellIcon } from '@/components/shell';
 import { useSessionResource } from '@/components/use-session-resource';
 import { api } from '@/lib/api';
@@ -18,7 +19,7 @@ export default function WorkspacesPage() {
   return (
     <AppShell profile={state.data.profile}>
       <section className="sh-directory">
-        <h1>Workspaces</h1>
+        <DirectoryCreate title="Workspaces" locale={state.data.profile.locale} target={{ kind: 'workspace' }} />
         {state.data.workspaces.length ? (
           <ul className="sh-directory-list">
             {state.data.workspaces.map(workspace => (

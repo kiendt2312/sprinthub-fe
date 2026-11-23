@@ -47,6 +47,11 @@
 }
 
 .viewStrip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   border-bottom: 1px solid var(--board-line);
   color: var(--board-accent);
   font-size: 14px;
@@ -69,6 +74,54 @@
   color: var(--board-muted);
   font-size: 13px;
   font-weight: 500;
+}
+
+.createForm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px;
+  margin-bottom: 16px;
+  padding: 12px;
+  border: 1px solid var(--board-line);
+  border-radius: 8px;
+  background: var(--board-lane);
+  font-size: 13px;
+}
+
+.titleField {
+  display: grid;
+  flex: 1 1 220px;
+  gap: 6px;
+  max-width: 440px;
+  font-weight: 650;
+}
+
+.titleField input {
+  min-width: 0;
+  min-height: 40px;
+  padding: 8px 11px;
+  border: 1px solid var(--board-line);
+  border-radius: 8px;
+  background: white;
+  color: var(--board-ink);
+  font-weight: 400;
+}
+
+.titleField input[aria-invalid="true"] {
+  border-color: #962f3d;
+}
+
+.createActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.createError {
+  flex-basis: 100%;
+  margin: 0;
+  color: #962f3d;
 }
 
 .readError {

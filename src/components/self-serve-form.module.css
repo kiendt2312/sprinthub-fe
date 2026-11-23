@@ -1,0 +1,55 @@
+.entryLink {
+  margin: 20px 0 0;
+  font-size: 13px;
+}
+
+.entryLink a {
+  color: var(--accent);
+  font-weight: 650;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.notice {
+  margin: 0 0 20px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.directoryHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px 20px;
+  margin-bottom: 24px;
+}
+
+header.directoryHeader h1 { margin: 0; }
+.directoryHeader button[hidden] { display: none; }
+
+.directoryForm {
+  max-width: 460px;
+  margin-bottom: 24px;
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.directoryForm h2 { margin: 0; font-size: 18px; }
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.field {
+  display: grid;
+  gap: 6px;
+}
+
+.field input { width: 100%; }
+.field input[aria-invalid='true'] { border-color: var(--danger); }
+.field small { color: var(--muted); font-size: 12px; }

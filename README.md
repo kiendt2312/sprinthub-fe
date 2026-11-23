@@ -1,6 +1,6 @@
 # SprintHub Web
 
-SprintHub's Next.js app. The first desktop demo runs against the local NestJS API and Redis, using a pre-created account, workspace, and project.
+SprintHub's Next.js app runs against the local NestJS API and Redis.
 
 ## Run locally
 
@@ -19,7 +19,11 @@ corepack pnpm install --frozen-lockfile
 corepack pnpm dev
 ```
 
-Prepare demo data in another terminal from this repo. Set `SPRINT_HUB_DEMO_EMAIL` and `SPRINT_HUB_DEMO_PASSWORD` in your shell before running the fixture. Use a local test account and a password of 15–128 characters. The fixture uses the public API and creates a fresh workspace and project each run. Leave registration enabled for fixture setup.
+Open [SprintHub](http://localhost:3000/login) and choose **Create an account**. With local registration enabled, register and then sign in from the returned form. Create a workspace, create a project, and use **Add task** on its board. The new card appears in **To do** and opens its task details.
+
+## Seed a board for the editing and drag-and-drop demo
+
+Set `SPRINT_HUB_DEMO_EMAIL` and `SPRINT_HUB_DEMO_PASSWORD` in a terminal in this repo, then run the fixture. Use a local test account and a password of 15–128 characters. The fixture uses the public API and creates a fresh workspace and project each run. Leave registration enabled for fixture setup.
 
 ```sh
 node scripts/demo-fixture.mjs
@@ -29,11 +33,11 @@ Open [SprintHub](http://localhost:3000/login), sign in with the demo credentials
 
 ## Verify
 
-While the web and API are running as above, run the browser suite against the local stack. The suite creates its own workspace and project and checks session revocation, stale edits, saved content, and board ordering.
+While the web and API are running as above, run the browser suite against the local stack with Redis. It checks the account-to-first-task flow, create retries and board refresh, plus session revocation, stale edits, saved content, and board ordering in the seeded demo.
 
 ```sh
 corepack pnpm exec playwright install chromium --only-shell
 corepack pnpm test:e2e
 ```
 
-For repeated runs under the local registration rate limit, set `SPRINT_HUB_E2E_EMAIL` and `SPRINT_HUB_E2E_PASSWORD` to a dedicated existing test account. This skips account registration when seeding the fixture.
+The self-serve test registers the same address twice to verify the neutral response. The seeded demo uses one additional registration by default, reaching the local limit of three registration requests per hour from one IP. Use a fresh isolated test Redis instance for repeated self-serve runs. Set `SPRINT_HUB_E2E_EMAIL` and `SPRINT_HUB_E2E_PASSWORD` to a dedicated existing test account to skip registration for the seeded demo.
